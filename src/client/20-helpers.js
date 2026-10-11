@@ -55,25 +55,6 @@
     function trapModalFocus(modal, event) { if (event.key !== "Tab") return; var focusable = modalFocusable(modal); if (!focusable.length) return; var active = document.activeElement; if (!modal.contains(active) || (event.shiftKey ? active === focusable[0] : active === focusable[focusable.length - 1])) { event.preventDefault(); (event.shiftKey ? focusable[focusable.length - 1] : focusable[0]).focus(); } }
     function handleModalEscape(event, onClose) { if (event.key !== "Escape") return false; event.preventDefault(); event.stopPropagation(); if (event.nativeEvent && typeof event.nativeEvent.stopImmediatePropagation === "function") event.nativeEvent.stopImmediatePropagation(); onClose(); return true; }
 
-    /**
-     * 刷新按钮（全站八处管理页共用：MCP / 技能 / 提示词 / 会话 / 场景 / 子智能体 / 记忆 / 兼容）。
-     * 宽度同样按两种文案里更宽的那个固定（见 fixedLabelPair），所以点一下「刷新」不会因为
-     * 文案变成「刷新中…」把整行挤走。
-     *
-     * @param tFn  取词函数 —— MCP 页传 `mt`（模块作用域的 t 会被宿主 locale 覆盖），其余页传各自的 t
-     * @param busy 是否正在刷新：决定显示哪份文案（通常也同时决定 disabled）
-     * @param args 透传给 <button> 的其余属性（className / disabled / onClick / title …）
-     */
-    function refreshButton(tFn, busy, args) {
-      var idle = tFn('btn.refresh')
-      var working = tFn('btn.refreshing')
-      // 定宽靠 `.dsm-btn.dsm-btn-bulk`（两段类名，见 CSS 里的注释）—— 由这里统一补上，
-      // 调用方只管自己的样式，不用记这个类。
-      var cls = ((args && args.className) || 'dsm-btn dsm-btn-secondary') + ' dsm-btn-bulk'
-      return React.createElement('button', Object.assign({ type: 'button' }, args, { className: cls }),
-        fixedLabelPair(busy ? working : idle, busy ? idle : working))
-    }
-
     // ── 访问令牌（用户裁定 2026-09-18）────────────────────────────────────────────
     // 三条要求：① 宿主没配时能在面板里设置；② 已配时，填对令牌就能关掉整个令牌功能；
     // ③ **填一次只管本次进程** —— DSH 退出再启动就要重填。

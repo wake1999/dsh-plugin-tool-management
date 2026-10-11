@@ -698,12 +698,7 @@
 
           return React.createElement('section', { className: 'dsm-section' },
             React.createElement('div', { className: 'dsm-head' },
-              React.createElement('div', { className: 'dsm-title-block' },
-                React.createElement('div', { className: 'dsm-title-row' },
-                  React.createElement('h2', { className: 'dsm-title' }, 'MCP')),
-                React.createElement('p', { className: 'dsm-desc' }, mt('mcp.desc'))),
               React.createElement('div', { className: 'dsm-actions' },
-                refreshButton(mt, busy !== null || state.loading, { className: 'dsm-btn dsm-btn-secondary', disabled: busy !== null || state.loading, onClick: () => refresh() }),
                 React.createElement('button', { type: 'button', className: 'dsm-btn dsm-btn-secondary', disabled: state.locked === true, onClick: openAdd }, mt('mcp.btn.new')),
                 // 「导入」是「一次建好一批」，与新增同一个写路径（`mcpm-import`），所以场景锁定期间同样置灰。
                 // 导出是只读动作，锁定期间照常用（拿配置不该要求先解锁环境）。
@@ -1354,7 +1349,6 @@
                   React.createElement('h2', { className: 'dsm-title' }, t('tabs.prompts'))),
                 React.createElement('p', { className: 'dsm-desc' }, t('prompts.desc'))),
               React.createElement('div', { className: 'dsm-actions' },
-                refreshButton(t, state.loading, { className: 'dsm-btn dsm-btn-secondary', disabled: state.loading, onClick: function () { refresh() } }),
                 React.createElement('button', { type: 'button', className: 'dsm-btn dsm-btn-secondary', disabled: state.anyLocked === true, onClick: function () { setCreateModal({ kind: 'global', id: '', content: '', description: '', error: null }) } }, t('agm.btn.new')),
                 React.createElement('button', { type: 'button', className: 'dsm-btn dsm-btn-secondary', disabled: busy !== null || state.anyLocked === true, onClick: function () { setImportResult(null); setImportOpen(true) } }, t('agm.btn.import')),
                 React.createElement('button', { type: 'button', className: 'dsm-btn dsm-btn-secondary', disabled: busy !== null || !(state.presets.length || quick.prompts.length), onClick: function () { setExportState({ busy: false, result: null }) } }, t('export.presets')),
