@@ -253,6 +253,26 @@
               refresh()
             }).then(() => setBusy(null))
           }
+          /**
+           * 重连一台服务（`mcpm-restart`）：服务端先把它临时停用、等 loader 摘掉、再按重启前的
+           * 状态恢复 —— 最长约 11 秒，所以**不走 `run()`**（那条路只服务"一按就回"的写操作，
+           * 也没有地方放 warnings）。启用状态不变，这正是"重启"与"关掉再打开"的区别。
+           * 只有驻留在补丁文件里的条目可重连：loader 行没有可写的 id/level，调用点据此隐藏按钮。
+           */
+          const restartRow = (row) => {
+            setMsg(null)
+            setBusy(row.id + ':restart')
+            apiCall('mcpm-restart', { id: row.id, level: row.level }).then((res) => {
+              if (res && res.ok === false) {
+                setMsg({ kind: 'err', text: (res && res.error) || mt('mcp.msg.failed') })
+              } else if (res && res.warnings && res.warnings.length) {
+                setMsg({ kind: 'warn', text: mt('mcp.msg.restartWarn', { warning: res.warnings.join('；') }) })
+              } else {
+                setMsg({ kind: 'ok', text: mt('mcp.msg.restarted', { name: row.serverName }) })
+              }
+            }).catch((e) => setMsg({ kind: 'err', text: errMsg(e) })).then(() => { setBusy(null); refresh() })
+          }
+
           const toggleReveal = () => {
             const next = !reveal
             setReveal(next)
@@ -365,6 +385,31 @@
                 setMsg({ kind: 'ok', text: mt(nextEnabled ? 'mcp.msg.toolOn' : 'mcp.msg.toolOff', { name: tool.name }) })
               } else setMsg({ kind: 'err', text: (res && res.error) || mt('mcp.msg.failed') })
             }).catch((e) => setMsg({ kind: 'err', text: errMsg(e) })).then(() => setBusy(null))
+          }
+
+          /**
+           * 详情页里"现在去问一次工具清单"（`mcpm-tools-refresh`）：对还没有缓存的服务器，
+           * 服务端是真的**临时启动一次**去抓工具名，拿到后恢复原启用状态 —— 所以它慢、也可能失败。
+           * 详情那节的「工具：N」平时只读缓存，这是唯一的主动刷新入口；在途响应按打开详情时的
+           * 序号作废（换了一台服务器就不该把旧结果写进去）。
+           */
+          const refreshTools = () => {
+            const row = detail && detail.row
+            if (!row) return
+            const seq = detailSeqRef.current
+            setMsg(null)
+            setBusy('tools:refresh')
+            apiCall('mcpm-tools-refresh', { serverName: row.serverName }).then((res) => {
+              if (seq !== detailSeqRef.current) return
+              if (res && res.ok === false) {
+                setMsg({ kind: 'err', text: (res && res.error) || mt('mcp.msg.failed') })
+                return
+              }
+              const tools = (res && res.tools) || []
+              setDetail((prev) => (prev === null ? prev : Object.assign({}, prev, { loading: false, error: null, tools: tools })))
+              if (res && res.warning) setMsg({ kind: 'warn', text: mt('mcp.msg.warn', { warning: res.warning }) })
+              else setMsg({ kind: 'ok', text: mt('mcp.msg.toolsRefreshed', { count: tools.length }) })
+            }).catch((e) => { if (seq === detailSeqRef.current) setMsg({ kind: 'err', text: errMsg(e) }) }).then(() => setBusy(null))
           }
 
           const rows = state.rows || []
@@ -498,6 +543,7 @@
                   row.notes ? React.createElement('div', { className: 'dsm-note dsm-note-user', title: row.notes }, mt('mcp.note.prefix') + row.notes) : null)),
               React.createElement('div', { className: 'dsm-row-actions' },
                 editable ? React.createElement(Switch, { on: !row.disabled, disabled: busy !== null || state.locked === true, label: mt('mcp.toggleServer') + ' ' + row.serverName, onClick: () => toggleRow(row) }) : null,
+                editable ? React.createElement('button', { type: 'button', className: 'dsm-btn dsm-btn-quiet', title: mt('mcp.btn.restart.title'), disabled: busy !== null, onClick: () => restartRow(row) }, mt('mcp.btn.restart')) : null,
                 React.createElement('button', { type: 'button', className: 'dsm-btn dsm-btn-quiet', disabled: !!(insp && insp.busy), onClick: () => runInspect(row) }, mt('mcp.inspect.row.btn')),
                 React.createElement('button', { type: 'button', className: 'dsm-btn dsm-btn-quiet', onClick: () => openDetail(row) }, mt('mcp.btn.detail')),
                 editable ? React.createElement('button', { type: 'button', className: 'dsm-btn dsm-btn-quiet', disabled: busy !== null, onClick: () => openEdit(row) }, mt('mcp.btn.edit')) : null,
@@ -505,7 +551,13 @@
               (insp && insp.checks && insp.checks.length > 0)
                 ? React.createElement('div', { className: 'dsm-inspect' }, insp.checks.map((c) => React.createElement('div', { key: c.id, className: 'dsm-inspect-line' + (c.level === 'warn' ? ' dsm-inspect-warn' : '') }, mt('mcp.inspect.check.' + c.id, c.params || {}))))
                 : null,
-              hint ? React.createElement('div', { className: 'dsm-row-hint' }, '⚠ ' + hint) : null)
+              hint ? React.createElement('div', { className: 'dsm-row-hint' },
+                '⚠ ' + hint,
+                // 提示原文是"把开关关掉再打开重试" —— 现在同一行里就有那个动作，不必让用户
+                // 自己去关再开（关开之间那台服务会短暂不可用，重连语义上更准）。
+                (editable && (status.tone === 'bad' || status.tone === 'warn'))
+                  ? React.createElement('button', { type: 'button', className: 'dsm-btn dsm-btn-quiet dsm-hint-act', disabled: busy !== null, onClick: () => restartRow(row) }, mt('mcp.btn.restart'))
+                  : null) : null)
           }
 
           const renderGroup = (group, groupRows) => {
@@ -645,6 +697,7 @@
             React.createElement('div', { className: 'dsm-detail-section' },
               React.createElement('div', { className: 'dsm-detail-title dsm-detail-title-row' },
                 mt('mcp.detail.config'),
+                React.createElement('button', { type: 'button', className: 'dsm-btn dsm-btn-quiet', title: mt('mcp.btn.restart.title'), disabled: busy !== null || detail.row.level === 'loader', onClick: () => restartRow(detail.row) }, mt('mcp.btn.restart')),
                 React.createElement('button', { type: 'button', className: 'dsm-btn dsm-btn-quiet', disabled: busy !== null, onClick: toggleReveal }, reveal ? mt('mcp.detail.hideSecret') : mt('mcp.detail.showSecret'))),
               React.createElement('div', { className: 'dsm-fm' },
                 configRow(mt('mcp.detail.entryId'), detail.row.id),
@@ -671,7 +724,9 @@
               React.createElement('div', { className: 'dsm-modal-actions' },
                 React.createElement('button', { type: 'button', className: 'dsm-btn dsm-btn-secondary', disabled: busy !== null || noteDraft.trim() === String(detail.row.notes || ''), onClick: saveNote }, mt('mcp.detail.note.save')))),
             React.createElement('div', { className: 'dsm-detail-section' },
-              React.createElement('div', { className: 'dsm-detail-title' }, mt('mcp.detail.tools', { count: detail.loading ? '…' : (detail.tools || []).length })),
+              React.createElement('div', { className: 'dsm-detail-title dsm-detail-title-row' },
+                mt('mcp.detail.tools', { count: detail.loading ? '…' : (detail.tools || []).length }),
+                React.createElement('button', { type: 'button', className: 'dsm-btn dsm-btn-quiet', disabled: busy !== null || detail.loading === true, onClick: refreshTools }, mt('mcp.detail.toolsRefresh'))),
               toolListNode))
 
 
